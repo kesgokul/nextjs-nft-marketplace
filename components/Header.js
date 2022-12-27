@@ -30,14 +30,6 @@ const Header = () => {
         >
           Sell NFTs
         </Link>
-        <Link
-          className={`hover:text-indigo-300 ${
-            currentRouter === "/token" ? "text-indigo-500" : ""
-          }`}
-          href="/token"
-        >
-          tokenUri
-        </Link>
       </nav>
     </header>
   );
