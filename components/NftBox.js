@@ -1,4 +1,4 @@
-import { Card } from "@web3uikit/core";
+import { Card, useNotification } from "@web3uikit/core";
 import Image from "next/image";
 import { useWeb3, useMoralis } from "react-moralis";
 import basicNftAbi from "../constants/BasicNft.json";
@@ -6,6 +6,7 @@ import marketplaceAbi from "../constants/Nftmarketplace.json";
 import { ethers } from "ethers";
 import { useEffect, useState } from "react";
 import UpdateListingCard from "./UpdateListingCard";
+import { useRouter } from "next/router";
 
 function formatAddress(address) {
   return address.slice(0, 6) + "...." + address.slice(-4);
@@ -13,13 +14,13 @@ function formatAddress(address) {
 }
 
 const NftBox = ({ owner, tokenId, nftAddress, price, marketplace }) => {
-  // let signer;
-  const [signer, setSigner] = useState({});
   const [imageUrl, setImageUrl] = useState("");
   const [symbol, setSymbol] = useState("");
   const [isOwner, setIsOwner] = useState(false);
   const [isUpdatingListing, setIsUpdatingListing] = useState(false);
   const { isWeb3Enabled, account, web3 } = useMoralis();
+  const router = useRouter();
+  const dispatch = useNotification();
 
   formatAddress(nftAddress);
 
@@ -46,6 +47,7 @@ const NftBox = ({ owner, tokenId, nftAddress, price, marketplace }) => {
 
   /////// getting token uri using vanilla ethers
   const getTokenURI = async () => {
+    const signer = web3.getSigner();
     const basicNft = new ethers.Contract(nftAddress, basicNftAbi, signer);
     const tx = await basicNft.tokenURI(tokenId, {
       gasLimit: 1000000000,
@@ -58,23 +60,49 @@ const NftBox = ({ owner, tokenId, nftAddress, price, marketplace }) => {
     setImageUrl(imageUriUrl);
   };
 
+  const handleNotification = (type, title, message) => {
+    dispatch({
+      type: type,
+      title: title,
+      message: message,
+      position: "topR",
+    });
+  };
+
   const buyItem = async () => {
     const nftMarketplace = new ethers.Contract(
       marketplace,
       marketplaceAbi,
       signer
     );
-    try {
-      const tx = await nftMarketplace.buyItem(nftAddress, tokenId, {
+    const tx = await nftMarketplace
+      .buyItem(nftAddress, tokenId, {
         value: price,
+      })
+      .then((result) => {
+        handleNotification(
+          "info",
+          "Pending",
+          `Transaction submitted as ${result.hash}. Waiting for confirmation...`
+        );
+      })
+      .catch((error) => {
+        console.log(error);
       });
-      console.log(tx);
-    } catch (e) {
-      console.log(e);
-    }
+    nftMarketplace.on("ItemBought", (event) => {
+      console.log(event);
+      handleNotification(
+        "success",
+        "Item Bought",
+        "Item bought successfully, please refresh the page."
+      );
+
+      // router.reload();
+    });
   };
 
   const updateListing = async (newPrice) => {
+    const signer = web3.getSigner();
     const newPriceEth = ethers.utils.parseEther(newPrice);
     const nftMarketplace = new ethers.Contract(
       marketplace,
@@ -82,20 +110,32 @@ const NftBox = ({ owner, tokenId, nftAddress, price, marketplace }) => {
       signer
     );
 
-    nftMarketplace.connect(signer);
+    // nftMarketplace.connect(signer);
 
     nftMarketplace
       .updatePrice(nftAddress, tokenId, newPriceEth)
       .then((result) => {
         console.log(result);
+        handleNotification(
+          "info",
+          "Pending",
+          `Transaction submitted as ${result.hash}. Waiting for confirmation...`
+        );
       })
       .catch((error) => {
         console.log(error);
       });
 
     // listing for the ItemListed event (means tx confirmation)
-    nftMarketplace.on("ItemListed", (e) => {
-      console.log(e);
+    nftMarketplace.on("ItemListed", (event) => {
+      console.log(event);
+      handleNotification(
+        "success",
+        "Price Updated",
+        "Price updated successfully, please refresh the page."
+      );
+
+      // router.reload();
     });
   };
 
@@ -106,27 +146,10 @@ const NftBox = ({ owner, tokenId, nftAddress, price, marketplace }) => {
     }
   }
 
-  async function getSigner() {
-    const ethereum = window.ethereum;
-    const provider = await new ethers.providers.Web3Provider(ethereum);
-    const currSigner = await provider.getSigner(account);
-    setSigner(currSigner);
-    console.log(signer);
-  }
-
   useEffect(() => {
     if (isWeb3Enabled) {
-      // updateUI();
-      // getSigner();
-      // getTokenURI();
-
-      const currSigner = web3.getSigner();
-      // setSigner(() => {
-      //   signer = currSigner;
-      // });
-
       checkIfOwner();
-      console.log(currSigner);
+      getTokenURI();
     }
   }, [isWeb3Enabled]);
 
@@ -191,7 +214,6 @@ const NftBox = ({ owner, tokenId, nftAddress, price, marketplace }) => {
           <UpdateListingCard
             onClose={handleCancelUpdate}
             onConfirm={updateListing}
-            signer={signer}
             style={{ position: "absolute", inset: "0" }}
           />
         )}

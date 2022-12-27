@@ -13,6 +13,7 @@
     "@web3uikit/core": "^0.2.20",
     "@web3uikit/icons": "^0.2.20",
     "@web3uikit/web3": "^0.2.2",
+    "dotenv": "^16.0.3",
     "eslint": "8.28.0",
     "eslint-config-next": "13.0.5",
     "ethers": "^5.7.2",
